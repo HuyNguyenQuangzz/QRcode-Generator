@@ -1,6 +1,14 @@
 import React, { useRef, useState } from "react";
 import { BsDownload, BsQrCode } from "react-icons/bs";
-import { Select, Input, Button, message, Upload, Table } from "antd";
+import {
+  Select,
+  Input,
+  Button,
+  message,
+  Upload,
+  Table,
+  Descriptions,
+} from "antd";
 import banksData from "../data/banks.json"; // Import file JSON
 import TemplateSelector from "./TemplateSelector";
 import { FiDownload } from "react-icons/fi";
@@ -12,6 +20,7 @@ import Link from "antd/es/typography/Link";
 import { useNavigate } from "react-router-dom";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+import DetailsQR from "./DetailsQR";
 
 // Simple UUID generator for transaction IDs
 const generateUUID = () => {
@@ -34,24 +43,37 @@ const QRGenerator = ({
   selectedTemplate,
   setSelectedTemplate,
 }) => {
+  const [showDetails, setShowDetails] = useState(false);
+  const [detailID, setDetailID] = useState({});
   const [selectedBank, setSelectedBank] = useState(null);
   const [accountNo, setAccountNo] = useState("");
   const [amount, setAmount] = useState("");
   const [addInfo, setAddInfo] = useState("");
-  // const [qrDataUrl, setQrDataUrl] = useState("");
+  const [fileName, setFileName] = useState(null);
   const banks = banksData.data; // Truy cập mảng "data" trong JSON
-  // const [transactions, setTransactions] = useState([]); // Lưu danh sách giao dịch
   const fileInputRef = useRef(null);
   const navigate = useNavigate(); // For programmatic redirect
-
+  const handleNextSpace = () => {
+    const index = transactions.findIndex((item) => item.id === detailID.id);
+    transactions[index].complete = true;
+    setTransactions([...transactions]);
+    if (index + 1 >= transactions.length) return;
+    setDetailID(transactions[index + 1]);
+    if (transactions[index + 1]?.id) {
+      const row = document.getElementById(`${transactions[index + 1].id}`);
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  };
   const validateInputs = () => {
     if (!selectedBank || !accountNo || !amount) {
       message.warning("Vui lòng điền đầy đủ thông tin!");
       return false;
     }
     const amountNum = parseInt(amount.replace(/[^0-9]/g, ""));
-    if (amountNum > 100000000) {
-      message.warning("Số tiền phải nhỏ hơn 100 triệu VNĐ!");
+    if (amountNum > 1000000000) {
+      message.warning("Số tiền phải nhỏ hơn 1 tỷ VNĐ!");
       return false;
     }
     if (addInfo.length > 99) {
@@ -66,7 +88,6 @@ const QRGenerator = ({
       message.warning("Không có mã QR nào để tải!");
       return;
     }
-
     try {
       const zip = new JSZip();
       transactions.forEach((transaction, index) => {
@@ -91,12 +112,6 @@ const QRGenerator = ({
       message.error("Lỗi khi tạo file ZIP!");
     }
   };
-  // const createVietQrUrl = (bankCode, accountNo, amount, addInfo) => {
-  //   const amountCleaned = amount.replace(/[^0-9]/g, "");
-  //   return `https://img.vietqr.io/image/${bankCode}-${accountNo}-compact.png?amount=${amountCleaned}&addInfo=${encodeURIComponent(
-  //     addInfo
-  //   )}&accountName=DefaultName`;
-  // };
   const generateQR = async (bankCode, account, amt, info) => {
     try {
       const bank = banks.find((b) => b.code === bankCode);
@@ -120,12 +135,13 @@ const QRGenerator = ({
       const transaction = {
         id: generateUUID(), // Ensure unique ID
         qrCodeDataUrl,
+        complete: false,
         bankName: bank.shortName,
         accountNo: account,
         amount: amt,
         addInfo: info,
       };
-      // console.log("Generated transaction:", transaction); // Debug log
+      console.log("Generated transaction:", transaction); // Debug log
       return transaction;
     } catch (error) {
       throw new Error(`Lỗi khi tạo mã QR: ${error.message}`);
@@ -149,14 +165,7 @@ const QRGenerator = ({
         amount,
         addInfo
       );
-      console.log("Current transactions:", transactions);
-      const currentTransactions = Array.isArray(transactions)
-        ? transactions
-        : [];
-      setTransactions([...currentTransactions, transaction]);
-      message.success("Tạo mã QR thành công!");
-      // Optional: Redirect to detail page after QR generation
-      navigate(`/transaction/${transaction.id}`);
+      setTransactions([...transactions, transaction]);
     } catch (error) {
       console.error(error);
       message.error(error.message);
@@ -174,6 +183,7 @@ const QRGenerator = ({
 
   const handleExcelUpload = async (file) => {
     try {
+      setFileName(file.name);
       const reader = new FileReader();
       reader.onload = async (e) => {
         const data = new Uint8Array(e.target.result);
@@ -187,12 +197,10 @@ const QRGenerator = ({
           const account = row["ACCOUNT_NO"]?.toString();
           const amount = Math.round(Number(row["AMOUNT"]))?.toString();
           const info = row["ADD_INFO"] || "";
-
           if (!bankCode || !account || !amount) {
             message.warning(`Dòng ${index + 1}: Thiếu thông tin bắt buộc!`);
             continue;
           }
-
           try {
             const transaction = await generateQR(
               bankCode,
@@ -213,17 +221,13 @@ const QRGenerator = ({
           );
           return;
         }
-
-        // console.log("Current transactions before update:", transactions);
-        // setTransactions([...transactions, ...newTransactions]);
-        // console.log("Current transactions before update:", transactions); // Debug log
         const currentTransactions = Array.isArray(transactions)
           ? transactions
           : [];
         setTransactions([...currentTransactions, ...newTransactions]);
       };
       reader.readAsArrayBuffer(file);
-      return false; // Ngăn Upload tự động gửi file
+      return false;
     } catch (error) {
       console.error("Lỗi khi xử lý file Excel:", error);
       message.error("Không thể xử lý file Excel!");
@@ -272,7 +276,7 @@ const QRGenerator = ({
             </div>
           </div>
         );
-      case "Hiển thị QR kèm logo V":
+      case "Hiển thị QR kèm logo":
         return (
           <div className="relative w-48 h-64 border-2 border-blue-300 rounded-lg p-2 bg-white">
             <div className="relative w-full flex justify-center mt-2">
@@ -296,53 +300,55 @@ const QRGenerator = ({
   };
 
   const columns = [
-    // adding STT
     {
       title: "STT",
       dataIndex: "index",
       key: "index",
+      className: "max-sm:text-[11px] nowrap",
       render: (text, record, index) => index + 1,
     },
     {
       title: "Ngân hàng",
       dataIndex: "bankName",
       key: "bankName",
+      className: "max-sm:text-[11px] nowrap",
     },
     {
       title: "Số tài khoản",
       dataIndex: "accountNo",
       key: "accountNo",
+      className: "max-sm:text-[11px] nowrap",
     },
     {
       title: "Số tiền (VNĐ)",
       dataIndex: "amount",
       key: "amount",
+      className: "max-sm:text-[11px] nowrap",
       render: (text) => formatNumber(text),
     },
-    // {
-    //   title: "Số tiền bằng chữ",
-    //   dataIndex: "amount",
-    //   key: "amountWords",
-    //   render: (text) => numberToWords(parseInt(text.replace(/[^0-9]/g, ""))),
-    // },
     {
       title: "Nội dung",
       dataIndex: "addInfo",
+      className: "max-sm:hidden",
       key: "addInfo",
-      render: (text) => (text.length > 20 ? text.slice(0, 5) + "..." : text),
+      // render: (text) => (text.length > 20 ? text.slice(0, 5) + "..." : text),
     },
-    {
-      title: "Mã QR",
-      key: "qrCode",
-      // render: (_, record) => (
-      //   <img src={record.qrCodeDataUrl} alt="QR Code" className="w-32 h-32" />
-      // ),
-      render: (text, record) =>
-        renderQRCodeWithTemplate(record.qrCodeDataUrl, record),
-    },
+    // {
+    //   title: "Mã QR",
+    //   key: "qrCode",
+    //   // render: (_, record) => (
+    //   //   <img src={record.qrCodeDataUrl} alt="QR Code" className="w-32 h-32" />
+    //   // ),
+    //   render: (text, record) => (
+    //     <div className="min-w-[170px]">
+    //       {renderQRCodeWithTemplate(record.qrCodeDataUrl, record)}
+    //     </div>
+    //   ),
+    // },
     {
       title: "Tải QR",
       key: "download",
+      className: "max-sm:text-[11px] nowrap",
       render: (_, record, index) => (
         <Button
           icon={<BsDownload />}
@@ -352,174 +358,188 @@ const QRGenerator = ({
         </Button>
       ),
     },
-    // {
-    //   title: "Chi tiết",
-    //   key: "details",
-    //   render: (_, record) => (
-    //     <Link to={`/transactions/${record.id}`}>Chi tiết</Link>
-    //   ),
-    // },
   ];
-  // Debug: Log transactions to check for missing IDs
-  // console.log("Rendering Table with transactions:", transactions);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-100 to-white p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-center mb-6 text-gray-800">
+    <div className="bg-gradient-to-b from-blue-100 to-white p-6 flex pb-[150px]">
+      <div className="max-w-5xl mx-auto">
+        <h1 className="text-4xl font-bold text-center mb-6 text-gray-800 hidden">
           Tạo QR Code VietQR
         </h1>
         <p className="text-center text-gray-600 mb-8">
-          Công cụ tạo QR Code online chuẩn VietQR. Phù hợp để hiển thị trên
-          website, ứng dụng, ngân hàng.
+          Công cụ tạo QR Code online chuẩn VietQR.
         </p>
 
         <div className="bg-white p-6 rounded-lg shadow-lg">
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ngân hàng thụ hưởng (*)
-              </label>
-              <Select
-                showSearch
-                placeholder="Chọn hoặc tìm ngân hàng"
-                optionFilterProp="children"
-                onChange={(value) => setSelectedBank(value)}
-                value={selectedBank}
-                className="w-full"
-                filterOption={(input, option) => {
-                  const bank = banks.find((b) => b.code === option.value);
-                  if (!bank) return false;
-                  return (
-                    bank.name.toLowerCase().includes(input.toLowerCase()) ||
-                    bank.shortName.toLowerCase().includes(input.toLowerCase())
-                  );
-                }}
-              >
-                {banks.map((bank) => (
-                  <Option key={bank.code} value={bank.code}>
-                    <div className="flex items-center">
-                      <img
-                        src={bank.logo}
-                        alt={bank.shortName}
-                        className="w-12 h-5 mr-2"
-                      />
-                      <span className="text-red-600 mr-2">★</span>
-                      <span>
-                        {bank.shortName} - {bank.name}
-                      </span>
-                    </div>
-                  </Option>
-                ))}
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Số tài khoản (*)
-              </label>
-              <Input
-                placeholder="Nhập số tài khoản"
-                value={accountNo}
-                onChange={(e) => setAccountNo(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Số tiền (VNĐ)
-              </label>
-              <Input
-                placeholder="Nhập số tiền (dưới 100 triệu)"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                suffix="VNĐ"
-                type="number"
-                className="w-full"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nội dung thanh toán
-              </label>
-              <Input
-                placeholder="Nhập nội dung  (dưới 99 ký tự)"
-                value={addInfo}
-                onChange={(e) => setAddInfo(e.target.value)}
-              />
-            </div>
-
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tải file Excel
-              </label>
-              <Upload
-                accept=".xlsx, .xls"
-                beforeUpload={handleExcelUpload}
-                showUploadList={false}
-              >
-                <Button>Chọn file Excel</Button>
-              </Upload>
-              <p className="text-sm text-gray-500 mt-1">
-                File Excel cần có các cột: BANK_CODE, ACCOUNT_NO, AMOUNT,
-                ADD_INFO
-              </p>
-            </div>
-
-            <div className="col-span-2">
-              <TemplateSelector onTemplateChange={setSelectedTemplate} />
-            </div>
-          </div>
-
-          <div className="mt-6 text-center">
-            <Button
-              type="primary"
-              size="large"
-              icon={<BsQrCode />}
-              onClick={handleGenerateQR}
-              className="bg-blue-500 hover:bg-blue-600"
-            >
-              Tạo QR
-            </Button>
-          </div>
-
-          {/* {qrDataUrl && (
-            <div className="mt-6 text-center">
-              <h3 className="text-lg font-medium text-gray-700 mb-2">
-                Mã QR VietQR
-              </h3>
-              <div className="flex justify-center">
-                <img src={qrDataUrl} alt="VietQR" />
+          <div
+            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+              fileName ? "max-h-[0px]" : "max-h-[400px]"
+            }`}
+          >
+            <div className="grid grid-cols-2 gap-6 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ngân hàng (*)
+                </label>
+                <Select
+                  showSearch
+                  placeholder="Chọn hoặc tìm ngân hàng"
+                  optionFilterProp="children"
+                  onChange={(value) => setSelectedBank(value)}
+                  value={selectedBank}
+                  className="w-full"
+                  filterOption={(input, option) => {
+                    const bank = banks.find((b) => b.code === option.value);
+                    if (!bank) return false;
+                    return (
+                      bank.name.toLowerCase().includes(input.toLowerCase()) ||
+                      bank.shortName.toLowerCase().includes(input.toLowerCase())
+                    );
+                  }}
+                >
+                  {banks.map((bank) => (
+                    <Option key={bank.code} value={bank.code}>
+                      <div className="flex items-center">
+                        <img
+                          src={bank.logo}
+                          alt={bank.shortName}
+                          className="w-12 h-5 mr-2"
+                        />
+                        <span className="text-red-600 mr-2">★</span>
+                        <span>
+                          {bank.shortName} - {bank.name}
+                        </span>
+                      </div>
+                    </Option>
+                  ))}
+                </Select>
               </div>
-              <p className="mt-2 text-gray-600">
-                Trong đó:
-                <ul className="list-disc list-inside mt-2 text-sm text-gray-700">
-                  <li>SỐ TÀI KHOẢN: Số tài khoản ngân hàng (bắt buộc).</li>
-                  <li>
-                    NGÂN HÀNG: Code ngân hàng hoặc Short Name của ngân hàng (bắt
-                    buộc). Đánh số tiền, nội dung thanh toán.
-                  </li>
-                  <li>SỐ TIỀN: Số tiền cần chuyển khoản.</li>
-                  <li>NOI DUNG: Nội dung chuyển khoản.</li>
-                  <li>
-                    TEMPLATE: Template cho ảnh QR (để trống, compact hoặc chỉ).
-                  </li>
-                  <li>DOWNLOAD: Tải QR về máy (true để tải về).</li>
-                </ul>
-              </p>
-              <p className="mt-4 text-gray-600">Nhúng vào website của bạn:</p>
-              <pre className="bg-gray-100 p-2 rounded text-sm">
-                <code>&lt;img src="{qrDataUrl}" alt="VietQR" /&gt;</code>
-              </pre>
-            </div>
-          )} */}
-        </div>
 
-        {Array.isArray(transactions) && transactions.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Số tài khoản (*)
+                </label>
+                <Input
+                  placeholder="Nhập số tài khoản"
+                  value={accountNo}
+                  onChange={(e) => setAccountNo(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Số tiền (VNĐ)
+                </label>
+                <Input
+                  placeholder="Nhập số tiền (dưới 1 tỷ)"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  suffix="VNĐ"
+                  type="number"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nội dung
+                </label>
+                <Input
+                  placeholder="Nhập nội dung (dưới 99 ký tự)"
+                  value={addInfo}
+                  onChange={(e) => setAddInfo(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="text-center">
+              <Button
+                type="primary"
+                size="large"
+                icon={<BsQrCode />}
+                onClick={() => {
+                  handleGenerateQR();
+                  window.scrollTo({
+                    top: document.body.scrollHeight,
+                    behavior: "smooth",
+                  });
+                }}
+                className="bg-blue-500 hover:bg-blue-600"
+              >
+                Tạo QR
+              </Button>
+            </div>
+            <div className="flex justify-center my-4 font-[500] text-[#999] text-[13px]">
+              Hoặc
+            </div>
+          </div>
+          <div className="flex flex-col items-center">
+            <Upload
+              accept=".xlsx, .xls"
+              beforeUpload={handleExcelUpload}
+              showUploadList={false}
+            >
+              <Button className="!p-8 !border-dashed border-[#000000]">
+                {fileName ?? "Chọn file Excel"}
+              </Button>
+            </Upload>
+            <p className="text-sm text-gray-500 mt-2">
+              File Excel cần có các cột: BANK_CODE, ACCOUNT_NO, AMOUNT, ADD_INFO
+            </p>
+          </div>
+        </div>
+        {Array.isArray(transactions) && transactions.length === 1 && (
+          <div className="flex flex-col items-center gap-6 mt-6 bg-white p-6 rounded-lg shadow-lg">
+            {amount && (
+              <div className="col-span-2">
+                <Select
+                  value={selectedTemplate}
+                  onChange={(e) => {
+                    setSelectedTemplate(e);
+                  }}
+                  className="w-full"
+                  popupMatchSelectWidth={false}
+                >
+                  <Option value="Khung VietQR">Khung VietQR</Option>
+                  <Option value="Hiển thị QR kèm logo">
+                    Hiển thị QR kèm logo
+                  </Option>
+                  <Option value="Chỉ hiển thị QR">Chỉ hiển thị QR</Option>
+                </Select>
+              </div>
+            )}
+            <div className="flex gap-4">
+              {/* <Descriptions column={1} bordered className="min-w-[600px]">
+                <Descriptions.Item label="Ngân hàng">
+                  {transactions[0].bankName}
+                </Descriptions.Item>
+                <Descriptions.Item label="Số tài khoản">
+                  {transactions[0].accountNo}
+                </Descriptions.Item>
+                <Descriptions.Item label="Số tiền">
+                  {formatNumber(transactions[0].amount)} VNĐ
+                </Descriptions.Item>
+                <Descriptions.Item label="Số tiền (chữ)">
+                  {transactions[0].amount
+                    ? numberToWords(transactions[0].amount)
+                    : ""}
+                </Descriptions.Item>
+                <Descriptions.Item label="Nội dung">
+                  {transactions[0].addInfo || "Không có nội dung"}
+                </Descriptions.Item>
+              </Descriptions> */}
+              <div className="flex justify-center w-[300px]">
+                {renderQRCodeWithTemplate(
+                  transactions[0].qrCodeDataUrl,
+                  transactions[0]
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {Array.isArray(transactions) && transactions.length > 1 && (
           <div className="mt-6 bg-white p-6 rounded-lg shadow-lg">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold text-gray-800">
+              <h2 className="font-bold text-gray-800 max-sm:text-[13px]">
                 Danh sách giao dịch
               </h2>
               <Button
@@ -530,23 +550,52 @@ const QRGenerator = ({
                 Tải tất cả mã QR
               </Button>
             </div>
-
             <Table
               className="w-full cursor-pointer"
               columns={columns}
               dataSource={transactions}
               rowKey={(record) => record.id || `fallback-${Math.random()}`} // Fallback key
+              rowClassName={(record) =>
+                ` max-sm:text-[11px] ${
+                  record.complete
+                    ? "bg-[#ecffe5]"
+                    : record.id === detailID?.id
+                    ? "bg-[#e5f3ff]"
+                    : ""
+                }`
+              }
               pagination={false}
               onRow={(record) => ({
-                onClick: () => navigate(`/transaction/${record.id}`),
-                // Navigate to detail page console.log("Row data:", record), // Debug log
+                onClick: () => {
+                  setShowDetails(true);
+                  setDetailID(record);
+                },
+                id: `${record.id}`,
               })}
             />
           </div>
         )}
-
-        {/* <p className="text-center text-gray-500 mt-6">© HappyCat 2025.</p> */}
       </div>
+      <DetailsQR
+        record={detailID}
+        open={showDetails}
+        setShowDetails={setShowDetails}
+        space={handleNextSpace}
+        next={() => {
+          const index = transactions.findIndex(
+            (item) => item.id === detailID.id
+          );
+          if (index + 1 >= transactions.length) return;
+          setDetailID(transactions[index + 1]);
+        }}
+        pre={() => {
+          const index = transactions.findIndex(
+            (item) => item.id === detailID.id
+          );
+          if (index - 1 < 0) return;
+          setDetailID(transactions[index - 1]);
+        }}
+      />
     </div>
   );
 };

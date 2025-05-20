@@ -10,11 +10,9 @@ const Footer = () => {
   }, []);
 
   return (
-    <footer className="bg-gray-100 py-5 sticky bottom-0">
+    <footer className="bg-white border-t-1 border-gray-200 py-5 fixed w-full left-0 bottom-0">
       <div className="max-w-8xl  mx-auto px-4 sm:px-6 lg:px-8">
-        <p className="text-gray-800 font-bold text-lg mb-4">
-          Áp dụng cho các ngân hàng
-        </p>
+        <p className="text-gray-800 font-bold text-lg mb-4">Ngân hàng hỗ trợ</p>
         {/* Thông tin công ty */}
         {/* <div className="mb-6">
           <p className="text-gray-800 font-bold text-lg">
@@ -80,7 +78,7 @@ const Footer = () => {
         </div>
 
         {/* Liên kết tải ứng dụng */}
-        <div className="flex justify-between items-center flex-wrap">
+        {/* <div className="flex justify-between items-center flex-wrap">
           <p className="text-gray-600 text-sm">Tải ứng dụng trên cửa hàng:</p>
           <div className="flex space-x-4 mt-2 sm:mt-0">
             <a
@@ -106,7 +104,7 @@ const Footer = () => {
               />
             </a>
           </div>
-        </div>
+        </div> */}
       </div>
     </footer>
   );

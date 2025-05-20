@@ -107,7 +107,7 @@ const TransactionDetail = ({
           <Card
             style={{ marginTop: "100px", textAlign: "center" }}
             title="Lỗi"
-            bordered={false}
+            variant={false}
           >
             <p className="text-gray-600 mb-4">
               Giao dịch với ID <strong>{id}</strong> không tồn tại.
